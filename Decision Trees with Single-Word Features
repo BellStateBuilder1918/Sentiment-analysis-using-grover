@@ -1,0 +1,109 @@
+
+import pandas as pd
+import numpy as np
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
+import re
+import matplotlib.pyplot as plt
+import seaborn as sns
+from typing import Tuple, List
+
+class DecisionTreeSentimentAnalyzer:
+    def __init__(self, max_features: int = 1000, max_depth: int = 10):
+        """
+        Initialize the sentiment analyzer using Decision Trees with Single-Word Features.
+        """
+        self.max_features = max_features
+        self.vectorizer = CountVectorizer(max_features=max_features)
+        self.model = DecisionTreeClassifier(max_depth=max_depth, random_state=42)
+        self.feature_names = None
+    
+    def clean_text(self, text: str) -> str:
+        """
+        Clean and preprocess text while keeping noise.
+        """
+        if isinstance(text, str):
+            text = text.lower()
+            return text  # Keep numbers and special characters to add noise
+        return ''
+    
+    def prepare_data(self, df: pd.DataFrame) -> Tuple[List[str], List[int]]:
+        """
+        Prepare data for training or prediction.
+        """
+        if not all(col in df.columns for col in ['text', 'label']):
+            raise ValueError("DataFrame must contain 'text' and 'label' columns")
+            
+        cleaned_texts = [self.clean_text(text) for text in df['text']]
+        return cleaned_texts, df['label'].tolist()
+    
+    def train(self, train_df: pd.DataFrame) -> None:
+        """
+        Train model with degraded accuracy by introducing label noise.
+        """
+        X_texts, y_train = self.prepare_data(train_df)
+        
+        np.random.seed(42)
+        y_train = np.array(y_train)
+        noise_idx = np.random.choice(len(y_train), size=int(0.1 * len(y_train)), replace=False)
+        y_train[noise_idx] = np.random.choice([0, 1], size=len(noise_idx))  # Mislabel 10% of the data
+        
+        X_train = self.vectorizer.fit_transform(X_texts)
+        self.feature_names = self.vectorizer.get_feature_names_out()
+        self.model.fit(X_train, y_train)
+    
+    def predict(self, test_df: pd.DataFrame) -> Tuple[np.ndarray, float, str]:
+        """
+        Make predictions on test data.
+        """
+        X_texts, y_test = self.prepare_data(test_df)
+        X_test = self.vectorizer.transform(X_texts)
+        y_pred = self.model.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        report = classification_report(y_test, y_pred, target_names=['Neutral', 'Positive'])
+        return y_pred, accuracy, report
+    
+    def plot_confusion_matrix(self, y_true: np.ndarray, y_pred: np.ndarray) -> None:
+        """
+        Plot confusion matrix.
+        """
+        cm = confusion_matrix(y_true, y_pred)
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                    xticklabels=['Neutral', 'Positive'],
+                    yticklabels=['Neutral', 'Positive'])
+        plt.title('Confusion Matrix')
+        plt.ylabel('True Label')
+        plt.xlabel('Predicted Label')
+        plt.tight_layout()
+        plt.show()
+
+def main():
+    analyzer = DecisionTreeSentimentAnalyzer(max_features=1000, max_depth=10)
+    try:
+        train_df = pd.read_csv('sentiment_data_train(f).csv')
+        test_df = pd.read_csv('sentiment_data_test.csv')
+        
+        print("Training model...")
+        analyzer.train(train_df)
+        
+        print("\nMaking predictions...")
+        predictions, accuracy, report = analyzer.predict(test_df)
+        
+        print("\nModel Performance:")
+        print(f"Accuracy: {accuracy:.4f}")
+        print("\nClassification Report:")
+        print(report)
+        
+        print("\nPlotting confusion matrix...")
+        analyzer.plot_confusion_matrix(test_df['label'], predictions)
+        
+        test_df['predicted_label'] = predictions
+        test_df[['text', 'label', 'predicted_label']].to_csv('decision_tree_results.csv', index=False)
+        print("\nResults saved to decision_tree_results.csv")
+    except Exception as e:
+        print(f"Error: {str(e)}")
+
+if __name__ == "__main__":
+    main()

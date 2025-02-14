@@ -39,8 +39,3 @@ pip install -r requirements.txt
 - The quantum feature selection process enhances the model by selecting optimal feature subsets.
 - The classifier achieves a measurable accuracy improvement compared to traditional methods.
 
-## Future Improvements
-
-
-
-
